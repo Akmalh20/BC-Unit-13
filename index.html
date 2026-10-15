@@ -1,0 +1,1012 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Air Slice Ninja Academy - Chinese Food Vocab</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- MediaPipe Hands & Camera Utils CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Plus+Jakarta+Sans:wght@600;800;900&display=swap" rel="stylesheet">
+
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', sans-serif;
+      user-select: none;
+      -webkit-user-select: none;
+      overflow: hidden;
+      background-color: #030712;
+    }
+    .font-chinese {
+      font-family: 'Ma Shan Zheng', cursive, sans-serif;
+    }
+    canvas {
+      touch-action: none;
+    }
+    .text-glow {
+      text-shadow: 0 0 12px rgba(245, 158, 11, 0.6), 0 0 24px rgba(239, 68, 68, 0.4);
+    }
+  </style>
+</head>
+<body class="w-screen h-screen relative flex items-center justify-center bg-slate-950 text-white">
+
+  <!-- Hidden Video Element for MediaPipe -->
+  <video id="webcam" class="hidden" playsinline></video>
+
+  <!-- Main Game Canvas Container -->
+  <div id="game-container" class="relative w-full h-full max-w-6xl max-h-[850px] aspect-[4/3] bg-slate-900 md:rounded-3xl shadow-2xl overflow-hidden border border-slate-800 flex flex-col">
+    
+    <!-- Top HUD Bar -->
+    <div class="absolute top-0 left-0 right-0 z-20 flex justify-between items-center px-4 py-3 bg-gradient-to-b from-slate-950/90 to-transparent pointer-events-none">
+      
+      <!-- Target Word Display -->
+      <div class="flex items-center gap-3 bg-slate-900/80 backdrop-blur-md border border-amber-500/40 px-4 py-2 rounded-2xl shadow-lg pointer-events-auto">
+        <span class="text-xs font-bold text-amber-400 uppercase tracking-wider">TARGET:</span>
+        <div class="flex items-baseline gap-2">
+          <span id="target-icon" class="text-2xl animate-bounce">🍞</span>
+          <span id="target-zh" class="font-chinese text-2xl font-bold text-amber-300">面包</span>
+          <span id="target-pinyin" class="text-sm font-semibold text-slate-300">miàn bāo</span>
+          <span id="target-en" class="text-xs text-amber-400/80 hidden sm:inline">(Bread)</span>
+        </div>
+        <button id="speaker-btn" onclick="speakCurrentTarget()" class="ml-2 bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 p-1.5 rounded-xl transition">
+          🔊
+        </button>
+      </div>
+
+      <!-- Stats: Score, Lives, Timer -->
+      <div class="flex items-center gap-4">
+        <!-- Score -->
+        <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700/60 px-4 py-2 rounded-2xl flex items-center gap-2">
+          <span class="text-xs text-slate-400 font-bold uppercase">SCORE</span>
+          <span id="score-text" class="text-xl font-extrabold text-emerald-400">0</span>
+        </div>
+
+        <!-- Lives -->
+        <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700/60 px-3 py-2 rounded-2xl flex items-center gap-1">
+          <span id="life-1" class="text-lg transition-transform duration-300">❤️</span>
+          <span id="life-2" class="text-lg transition-transform duration-300">❤️</span>
+          <span id="life-3" class="text-lg transition-transform duration-300">❤️</span>
+        </div>
+
+        <!-- Timer -->
+        <div class="bg-slate-900/80 backdrop-blur-md border border-slate-700/60 px-4 py-2 rounded-2xl flex items-center gap-2">
+          <span class="text-xs text-slate-400 font-bold uppercase">TIME</span>
+          <span id="timer-text" class="text-xl font-extrabold text-amber-400">60</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Camera / Tracking Status Banner -->
+    <div id="status-banner" class="absolute top-16 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 backdrop-blur-md pointer-events-none transition-opacity duration-300">
+      📷 Initializing Hand Tracking Camera...
+    </div>
+
+    <!-- Main Rendering Canvas -->
+    <canvas id="game-canvas" class="w-full h-full object-cover cursor-crosshair"></canvas>
+
+    <!-- Start Overlay Modal -->
+    <div id="start-modal" class="absolute inset-0 z-30 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-6">
+      <div class="max-w-xl w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
+        
+        <div class="inline-block p-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl mb-2 text-3xl">
+          ⚔️ 🥷 🍎
+        </div>
+
+        <h1 class="text-2xl sm:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-400 to-red-500 mb-1">
+          AIR SLICE NINJA ACADEMY
+        </h1>
+        <p class="text-xs sm:text-sm text-slate-300 mb-4">
+          Slice Chinese Year 1 Food words in mid-air using your <strong class="text-amber-400">Index Finger</strong>!
+        </p>
+
+        <!-- Student Name Selection Box -->
+        <div class="bg-slate-950/80 border border-amber-500/30 rounded-2xl p-4 mb-4 text-left">
+          <div class="flex items-center justify-between mb-2">
+            <span class="text-xs font-bold text-amber-400 uppercase tracking-wider">👤 Student Selector / Senarai Murid:</span>
+            <span id="student-count-badge" class="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full border border-amber-500/30">0 Students</span>
+          </div>
+
+          <!-- Add Name Input -->
+          <div class="flex gap-2 mb-3">
+            <input id="student-input" type="text" placeholder="Masukkan nama murid..." class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-400 transition" onkeypress="if(event.key==='Enter') addStudent()">
+            <button onclick="addStudent()" class="bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-xl transition active:scale-95">
+              + Tambah
+            </button>
+          </div>
+
+          <!-- Student Tags List -->
+          <div id="student-tags-container" class="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto mb-3 p-1">
+            <!-- Dynamic Student Tags will render here -->
+          </div>
+
+          <!-- Random Picker Button & Current Selected Display -->
+          <div class="flex items-center justify-between bg-slate-900 p-3 rounded-xl border border-slate-800">
+            <div>
+              <div class="text-[10px] text-slate-400 font-bold uppercase">GIILIRAN MURID (SELECTED):</div>
+              <div id="selected-student-display" class="text-lg font-extrabold text-amber-300 flex items-center gap-1.5">
+                <span>🎯</span> <span id="current-player-name">Sila Pilih / Rawak</span>
+              </div>
+            </div>
+            <button onclick="pickRandomStudent()" class="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl shadow transition active:scale-95 flex items-center gap-1">
+              🎲 Pick Random
+            </button>
+          </div>
+        </div>
+
+        <!-- Vocab Cards Carousel Preview -->
+        <div class="bg-slate-950/70 border border-slate-800 rounded-2xl p-3 mb-4">
+          <div class="text-[11px] font-bold text-amber-400 uppercase tracking-wider mb-2">Featured Year 1 Words:</div>
+          <div class="grid grid-cols-4 sm:grid-cols-8 gap-2 text-center text-xs">
+            <div class="bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <div class="text-base">🍞</div>
+              <div class="font-chinese text-amber-300 text-xs">面包</div>
+            </div>
+            <div class="bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <div class="text-base">🥟</div>
+              <div class="font-chinese text-amber-300 text-xs">包子</div>
+            </div>
+            <div class="bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <div class="text-base">🍜</div>
+              <div class="font-chinese text-amber-300 text-xs">面</div>
+            </div>
+            <div class="bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <div class="text-base">🍚</div>
+              <div class="font-chinese text-amber-300 text-xs">米饭</div>
+            </div>
+            <div class="bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <div class="text-base">🍗</div>
+              <div class="font-chinese text-amber-300 text-xs">炸鸡</div>
+            </div>
+            <div class="bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <div class="text-base">🍫</div>
+              <div class="font-chinese text-amber-300 text-xs">巧克力</div>
+            </div>
+            <div class="bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <div class="text-base">🍔</div>
+              <div class="font-chinese text-amber-300 text-xs">汉堡包</div>
+            </div>
+            <div class="bg-slate-900 p-1 rounded-lg border border-slate-800">
+              <div class="text-base">🍎</div>
+              <div class="font-chinese text-amber-300 text-xs">苹果</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Buttons -->
+        <div class="flex flex-col sm:flex-row gap-3">
+          <button id="start-btn" onclick="startGame('camera')" class="flex-1 py-3.5 px-6 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 font-extrabold rounded-2xl shadow-lg shadow-orange-950/50 text-white transition transform active:scale-95 text-sm">
+            📷 MULA MAI (WEBCAM)
+          </button>
+          <button onclick="startGame('touch')" class="py-3.5 px-5 bg-slate-800 hover:bg-slate-700 font-bold rounded-2xl border border-slate-700 text-slate-300 transition active:scale-95 text-xs">
+            👆 TOUCH / MOUSE ONLY
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Game Over Modal -->
+    <div id="gameover-modal" class="hidden absolute inset-0 z-30 flex items-center justify-center bg-slate-950/90 backdrop-blur-md p-6">
+      <div class="max-w-md w-full bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 text-center shadow-2xl">
+        <div id="gameover-icon" class="text-5xl mb-2">🥷</div>
+        <div id="player-gameover-tag" class="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1">NINJA: -</div>
+        <h2 id="gameover-title" class="text-3xl font-black text-amber-400 mb-1">Masa 1 Minit Tamat!</h2>
+        <p id="gameover-desc" class="text-sm text-slate-400 mb-6">Great effort Ninja!</p>
+
+        <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 mb-6 flex justify-around">
+          <div>
+            <div class="text-xs text-slate-500 font-bold">FINAL SCORE</div>
+            <div id="final-score" class="text-3xl font-extrabold text-amber-400">0</div>
+          </div>
+          <div class="border-r border-slate-800"></div>
+          <div>
+            <div class="text-xs text-slate-500 font-bold">SLICED WORDS</div>
+            <div id="final-sliced" class="text-3xl font-extrabold text-emerald-400">0</div>
+          </div>
+        </div>
+
+        <button onclick="nextStudentOrRestart()" class="w-full py-3.5 px-6 bg-amber-500 hover:bg-amber-400 font-black rounded-2xl text-slate-950 shadow-lg transition active:scale-95">
+          GILIRAN MURID SETERUSNYA 🔄
+        </button>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    /* =========================================================================
+       1. DATA DEFINITIONS - PRIMARY & DISTRACTOR VOCABULARY
+       ========================================================================= */
+    const PRIMARY_VOCAB = [
+      { zh: "面包", pinyin: "miàn bāo", english: "Bread", icon: "🍞" },
+      { zh: "包子", pinyin: "bāo zi", english: "Steamed Bun", icon: "🥟" },
+      { zh: "面", pinyin: "miàn", english: "Noodles", icon: "🍜" },
+      { zh: "米饭", pinyin: "mǐ fàn", english: "Rice", icon: "🍚" },
+      { zh: "炸鸡", pinyin: "zhà jī", english: "Fried Chicken", icon: "🍗" },
+      { zh: "巧克力", pinyin: "qiǎo kè lì", english: "Chocolate", icon: "🍫" },
+      { zh: "汉堡包", pinyin: "hàn bāo bāo", english: "Hamburger", icon: "🍔" },
+      { zh: "苹果", pinyin: "píng guǒ", english: "Apple", icon: "🍎" }
+    ];
+
+    const DISTRACTOR_VOCAB = [
+      { zh: "牛奶", pinyin: "niú nǎi", english: "Milk", icon: "🥛" },
+      { zh: "披萨", pinyin: "pī sà", english: "Pizza", icon: "🍕" },
+      { zh: "冰淇淋", pinyin: "bīng qí lín", english: "Ice Cream", icon: "🍦" },
+      { zh: "鸡蛋", pinyin: "jī dàn", english: "Egg", icon: "🥚" },
+      { zh: "蛋糕", pinyin: "dàn gāo", english: "Cake", icon: "🍰" },
+      { zh: "水", pinyin: "shuǐ", english: "Water", icon: "💧" }
+    ];
+
+    /* =========================================================================
+       STUDENT MANAGEMENT SYSTEM
+       ========================================================================= */
+    let studentList = ["Ali", "Ahmad", "Mei Ling", "Siti", "Muthu"];
+    let currentStudent = "";
+
+    function renderStudents() {
+      const container = document.getElementById('student-tags-container');
+      const badge = document.getElementById('student-count-badge');
+      badge.innerText = `${studentList.length} Students`;
+      container.innerHTML = '';
+
+      if (studentList.length === 0) {
+        container.innerHTML = `<span class="text-xs text-slate-500 italic">Tiada nama murid. Sila tambah nama murid di atas.</span>`;
+        return;
+      }
+
+      studentList.forEach((name, index) => {
+        const tag = document.createElement('div');
+        const isSelected = name === currentStudent;
+        tag.className = `flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-semibold cursor-pointer transition ${
+          isSelected 
+            ? 'bg-amber-500 text-slate-950 font-bold border border-amber-300 shadow-md scale-105' 
+            : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+        }`;
+        
+        tag.innerHTML = `
+          <span onclick="selectStudent('${name}')">👤 ${name}</span>
+          <button onclick="removeStudent(${index})" class="text-slate-400 hover:text-red-400 ml-1 text-xs">✕</button>
+        `;
+        container.appendChild(tag);
+      });
+    }
+
+    function addStudent() {
+      const input = document.getElementById('student-input');
+      const val = input.value.trim();
+      if (val) {
+        studentList.push(val);
+        input.value = '';
+        if (!currentStudent) currentStudent = val;
+        updateSelectedStudentUI();
+        renderStudents();
+      }
+    }
+
+    function removeStudent(index) {
+      const removed = studentList.splice(index, 1)[0];
+      if (currentStudent === removed) {
+        currentStudent = studentList.length > 0 ? studentList[0] : "";
+      }
+      updateSelectedStudentUI();
+      renderStudents();
+    }
+
+    function selectStudent(name) {
+      currentStudent = name;
+      updateSelectedStudentUI();
+      renderStudents();
+    }
+
+    function pickRandomStudent() {
+      if (studentList.length === 0) return;
+      
+      let count = 0;
+      const interval = setInterval(() => {
+        const randomName = studentList[Math.floor(Math.random() * studentList.length)];
+        document.getElementById('current-player-name').innerText = randomName;
+        count++;
+        if (count > 12) {
+          clearInterval(interval);
+          currentStudent = randomName;
+          updateSelectedStudentUI();
+          renderStudents();
+          sound.playCorrect();
+        }
+      }, 70);
+    }
+
+    function updateSelectedStudentUI() {
+      const nameDisplay = document.getElementById('current-player-name');
+      if (currentStudent) {
+        nameDisplay.innerText = currentStudent;
+      } else {
+        nameDisplay.innerText = "Sila Pilih / Rawak";
+      }
+    }
+
+    /* Initialize student default view */
+    currentStudent = studentList[0] || "";
+    updateSelectedStudentUI();
+    renderStudents();
+
+    /* =========================================================================
+       2. WEB AUDIO SYNTHESIZER
+       ========================================================================= */
+    class AudioEngine {
+      constructor() {
+        this.ctx = null;
+      }
+
+      init() {
+        if (!this.ctx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          this.ctx = new AudioContext();
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+          this.ctx.resume();
+        }
+      }
+
+      playSwoosh() {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.12);
+        gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.12);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start();
+        osc.stop(this.ctx.currentTime + 0.12);
+      }
+
+      playCorrect() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.05);
+          gain.gain.setValueAtTime(0.2, now + idx * 0.05);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.05 + 0.2);
+          osc.connect(gain);
+          gain.connect(this.ctx.destination);
+          osc.start(now + idx * 0.05);
+          osc.stop(now + idx * 0.05 + 0.2);
+        });
+      }
+
+      playWrong() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.setValueAtTime(110, now + 0.1);
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      }
+
+      playExplosion() {
+        if (!this.ctx) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(100, now);
+        osc.frequency.exponentialRampToValueAtTime(20, now + 0.4);
+        gain.gain.setValueAtTime(0.4, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.4);
+      }
+    }
+
+    const sound = new AudioEngine();
+
+    /* Speech Synthesis Helper */
+    function speakWord(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // stop previous
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'zh-CN';
+        utterance.rate = 0.85;
+        window.speechSynthesis.speak(utterance);
+      }
+    }
+
+    /* =========================================================================
+       3. GAME STATE & SETUP
+       ========================================================================= */
+    const canvas = document.getElementById('game-canvas');
+    const ctx = canvas.getContext('2d');
+    const video = document.getElementById('webcam');
+    const statusBanner = document.getElementById('status-banner');
+
+    let gameActive = false;
+    let score = 0;
+    let lives = 3;
+    let timer = 60;
+    let timerInterval = null;
+    let slicedCount = 0;
+    let controlMode = 'camera'; // 'camera' or 'touch'
+
+    let currentTargetWord = PRIMARY_VOCAB[0];
+    let targets = [];
+    let particles = [];
+    let sliceTrails = []; // {x, y, time}
+
+    // Finger tracking coordinates (mirrored)
+    let indexFinger = { x: -100, y: -100, active: false };
+    let lastFinger = { x: -100, y: -100 };
+
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+    }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    /* =========================================================================
+       4. TARGET & PHYSICS ENGINE
+       ========================================================================= */
+    class Target {
+      constructor() {
+        this.radius = 45;
+        this.x = Math.random() * (canvas.width - 120) + 60;
+        this.y = canvas.height + this.radius;
+        
+        // Launch Physics
+        const targetX = canvas.width / 2 + (Math.random() - 0.5) * 200;
+        this.vx = (targetX - this.x) * 0.015;
+        this.vy = -(Math.random() * 4 + 13); // Upward boost
+        this.gravity = 0.22;
+        this.rotation = 0;
+        this.vRot = (Math.random() - 0.5) * 0.08;
+
+        // Determine item type: 50% target, 35% distractor, 15% bomb
+        const rand = Math.random();
+        if (rand < 0.5) {
+          this.isBomb = false;
+          this.data = currentTargetWord;
+          this.isCorrect = true;
+        } else if (rand < 0.85) {
+          this.isBomb = false;
+          // Pick distractor from either list
+          const pool = [...PRIMARY_VOCAB, ...DISTRACTOR_VOCAB].filter(v => v.zh !== currentTargetWord.zh);
+          this.data = pool[Math.floor(Math.random() * pool.length)];
+          this.isCorrect = false;
+        } else {
+          this.isBomb = true;
+          this.data = { zh: "💥", pinyin: "BOMB", icon: "💣" };
+          this.isCorrect = false;
+        }
+
+        this.sliced = false;
+        this.sliceAngle = 0;
+        this.half1X = 0;
+        this.half2X = 0;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.vy += this.gravity;
+        this.rotation += this.vRot;
+
+        if (this.sliced) {
+          this.half1X -= 2;
+          this.half2X += 2;
+        }
+      }
+
+      draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+
+        if (!this.sliced) {
+          ctx.rotate(this.rotation);
+
+          // Outer Glow
+          ctx.beginPath();
+          ctx.arc(0, 0, this.radius + 4, 0, Math.PI * 2);
+          ctx.fillStyle = this.isBomb ? 'rgba(239, 68, 68, 0.25)' : (this.isCorrect ? 'rgba(245, 158, 11, 0.25)' : 'rgba(148, 163, 184, 0.15)');
+          ctx.fill();
+
+          // Bubble background
+          ctx.beginPath();
+          ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+          ctx.fillStyle = this.isBomb ? '#1e1b4b' : '#0f172a';
+          ctx.strokeStyle = this.isBomb ? '#ef4444' : (this.isCorrect ? '#f59e0b' : '#475569');
+          ctx.lineWidth = 3;
+          ctx.fill();
+          ctx.stroke();
+
+          // Render Icon
+          ctx.font = '28px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(this.data.icon, 0, -10);
+
+          // Render Chinese Text & Pinyin
+          if (!this.isBomb) {
+            ctx.font = 'bold 16px "Ma Shan Zheng", sans-serif';
+            ctx.fillStyle = '#fef08a';
+            ctx.fillText(this.data.zh, 0, 16);
+
+            ctx.font = '10px "Plus Jakarta Sans", sans-serif';
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText(this.data.pinyin, 0, 28);
+          }
+        } else {
+          // Draw Sliced Halves
+          ctx.font = '24px sans-serif';
+          ctx.textAlign = 'center';
+          
+          // Left Half
+          ctx.save();
+          ctx.translate(this.half1X, 0);
+          ctx.rotate(-0.3);
+          ctx.fillText(this.data.icon, -10, 0);
+          ctx.restore();
+
+          // Right Half
+          ctx.save();
+          ctx.translate(this.half2X, 0);
+          ctx.rotate(0.3);
+          ctx.fillText(this.data.icon, 10, 0);
+          ctx.restore();
+        }
+
+        ctx.restore();
+      }
+    }
+
+    /* Particle Effects for Slicing */
+    class Particle {
+      constructor(x, y, color) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 10;
+        this.vy = (Math.random() - 0.5) * 10;
+        this.radius = Math.random() * 4 + 2;
+        this.color = color;
+        this.life = 1.0;
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.life -= 0.04;
+      }
+      draw() {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    /* =========================================================================
+       5. GAME LOGIC & INTERACTION
+       ========================================================================= */
+    function setNextTargetWord() {
+      const rand = PRIMARY_VOCAB[Math.floor(Math.random() * PRIMARY_VOCAB.length)];
+      currentTargetWord = rand;
+
+      document.getElementById('target-icon').innerText = currentTargetWord.icon;
+      document.getElementById('target-zh').innerText = currentTargetWord.zh;
+      document.getElementById('target-pinyin').innerText = currentTargetWord.pinyin;
+      document.getElementById('target-en').innerText = `(${currentTargetWord.english})`;
+
+      speakWord(currentTargetWord.zh);
+    }
+
+    function speakCurrentTarget() {
+      if (currentTargetWord) {
+        speakWord(currentTargetWord.zh);
+      }
+    }
+
+    function spawnTargets() {
+      if (!gameActive) return;
+      if (targets.length < 3) {
+        targets.push(new Target());
+      }
+      // Schedule next spawn randomly
+      setTimeout(spawnTargets, Math.random() * 1200 + 800);
+    }
+
+    function checkSliceIntersection(p1, p2, target) {
+      // Line-point distance to circle center
+      const dx = p2.x - p1.x;
+      const dy = p2.y - p1.y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      if (len === 0) return false;
+
+      const u = ((target.x - p1.x) * dx + (target.y - p1.y) * dy) / (len * len);
+      const clampedU = Math.max(0, Math.min(1, u));
+
+      const nearestX = p1.x + clampedU * dx;
+      const nearestY = p1.y + clampedU * dy;
+
+      const dist = Math.hypot(target.x - nearestX, target.y - nearestY);
+      return dist < target.radius;
+    }
+
+    function createExplosion(x, y, color) {
+      for (let i = 0; i < 20; i++) {
+        particles.push(new Particle(x, y, color));
+      }
+    }
+
+    function handleSlice(target) {
+      target.sliced = true;
+
+      if (target.isBomb) {
+        sound.playExplosion();
+        createExplosion(target.x, target.y, '#ef4444');
+        deductLife();
+      } else if (target.isCorrect) {
+        sound.playCorrect();
+        createExplosion(target.x, target.y, '#f59e0b');
+        score += 10;
+        slicedCount++;
+        document.getElementById('score-text').innerText = score;
+        speakWord(target.data.zh);
+        
+        // Pick new target word after successful slice
+        setTimeout(setNextTargetWord, 400);
+      } else {
+        // Sliced wrong word
+        sound.playWrong();
+        createExplosion(target.x, target.y, '#64748b');
+        deductLife();
+      }
+    }
+
+    function deductLife() {
+      lives--;
+      updateLifeDisplay();
+      if (lives <= 0) {
+        endGame(false);
+      }
+    }
+
+    function updateLifeDisplay() {
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`life-${i}`);
+        if (i <= lives) {
+          el.style.opacity = '1';
+          el.style.transform = 'scale(1)';
+        } else {
+          el.style.opacity = '0.2';
+          el.style.transform = 'scale(0.7)';
+        }
+      }
+    }
+
+    /* =========================================================================
+       6. MEDIAPIPE HANDS TRACKING & WEBCAM
+       ========================================================================= */
+    let hands = null;
+    let cameraUtils = null;
+
+    function initMediaPipe() {
+      if (typeof Hands === 'undefined') {
+        statusBanner.innerText = "⚠️ MediaPipe CDN blocked. Playing with Touch/Mouse!";
+        controlMode = 'touch';
+        return;
+      }
+
+      hands = new Hands({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+      });
+
+      hands.setOptions({
+        maxNumHands: 1,
+        modelComplexity: 1,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5
+      });
+
+      hands.onResults(onHandResults);
+
+      if (typeof Camera !== 'undefined') {
+        cameraUtils = new Camera(video, {
+          onFrame: async () => {
+            if (gameActive && controlMode === 'camera') {
+              await hands.send({ image: video });
+            }
+          },
+          width: 640,
+          height: 480
+        });
+      }
+    }
+
+    function onHandResults(results) {
+      if (!gameActive || controlMode !== 'camera') return;
+
+      if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+        const landmarks = results.multiHandLandmarks[0];
+        // Index Finger Tip is Landmark 8
+        const tip = landmarks[8];
+
+        // Mirror X-coordinate for natural selfie movement
+        const mirroredX = (1 - tip.x) * canvas.width;
+        const mirroredY = tip.y * canvas.height;
+
+        indexFinger.x = mirroredX;
+        indexFinger.y = mirroredY;
+        indexFinger.active = true;
+
+        statusBanner.innerText = "⚡ Finger Tracked - Ready to Slice!";
+        statusBanner.className = "absolute top-16 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 backdrop-blur-md pointer-events-none transition-opacity duration-300";
+      } else {
+        indexFinger.active = false;
+        statusBanner.innerText = "✋ Raise your Index Finger to Slice!";
+        statusBanner.className = "absolute top-16 left-1/2 -translate-x-1/2 z-20 px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 backdrop-blur-md pointer-events-none transition-opacity duration-300";
+      }
+    }
+
+    /* Touch & Mouse Fallback Listeners */
+    canvas.addEventListener('mousemove', (e) => {
+      if (controlMode === 'touch') {
+        const rect = canvas.getBoundingClientRect();
+        indexFinger.x = e.clientX - rect.left;
+        indexFinger.y = e.clientY - rect.top;
+        indexFinger.active = true;
+      }
+    });
+
+    canvas.addEventListener('mouseleave', () => {
+      if (controlMode === 'touch') indexFinger.active = false;
+    });
+
+    canvas.addEventListener('touchmove', (e) => {
+      if (controlMode === 'touch' && e.touches.length > 0) {
+        const rect = canvas.getBoundingClientRect();
+        indexFinger.x = e.touches[0].clientX - rect.left;
+        indexFinger.y = e.touches[0].clientY - rect.top;
+        indexFinger.active = true;
+      }
+    });
+
+    canvas.addEventListener('touchend', () => {
+      if (controlMode === 'touch') indexFinger.active = false;
+    });
+
+    /* =========================================================================
+       7. MAIN ANIMATION LOOP
+       ========================================================================= */
+    function gameLoop() {
+      // Clear canvas
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw Webcam Feed Background (if camera mode active)
+      if (controlMode === 'camera' && video.readyState >= 2) {
+        ctx.save();
+        ctx.globalAlpha = 0.35; // Translucent preview background
+        ctx.translate(canvas.width, 0);
+        ctx.scale(-1, 1); // Mirror horizontal
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.restore();
+      } else {
+        // Dark Dojo Canvas Gradient Background
+        const grad = ctx.createRadialGradient(canvas.width/2, canvas.height/2, 50, canvas.width/2, canvas.height/2, canvas.width);
+        grad.addColorStop(0, '#0f172a');
+        grad.addColorStop(1, '#020617');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+
+      // Record Slice Trail Point
+      if (indexFinger.active) {
+        sliceTrails.push({ x: indexFinger.x, y: indexFinger.y, time: Date.now() });
+
+        // Play swoosh on quick movement
+        const dist = Math.hypot(indexFinger.x - lastFinger.x, indexFinger.y - lastFinger.y);
+        if (dist > 35) {
+          sound.playSwoosh();
+        }
+
+        // Check intersection with active targets
+        if (lastFinger.x > 0 && lastFinger.y > 0) {
+          targets.forEach(target => {
+            if (!target.sliced && checkSliceIntersection(lastFinger, indexFinger, target)) {
+              handleSlice(target);
+            }
+          });
+        }
+
+        lastFinger.x = indexFinger.x;
+        lastFinger.y = indexFinger.y;
+      } else {
+        lastFinger = { x: -100, y: -100 };
+      }
+
+      // Filter expired trail points (older than 150ms)
+      const now = Date.now();
+      sliceTrails = sliceTrails.filter(p => now - p.time < 150);
+
+      // Render Blade Slice Trail
+      if (sliceTrails.length > 1) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(sliceTrails[0].x, sliceTrails[0].y);
+        for (let i = 1; i < sliceTrails.length; i++) {
+          ctx.lineTo(sliceTrails[i].x, sliceTrails[i].y);
+        }
+        ctx.strokeStyle = '#f59e0b';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.shadowColor = '#fbbf24';
+        ctx.shadowBlur = 15;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draw Index Finger Cursor Point
+      if (indexFinger.active) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(indexFinger.x, indexFinger.y, 10, 0, Math.PI * 2);
+        ctx.fillStyle = '#f59e0b';
+        ctx.shadowColor = '#f59e0b';
+        ctx.shadowBlur = 20;
+        ctx.fill();
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Update & Draw Targets
+      for (let i = targets.length - 1; i >= 0; i--) {
+        const t = targets[i];
+        t.update();
+        t.draw();
+
+        // Check if target dropped off screen without being sliced
+        if (t.y > canvas.height + 100) {
+          if (!t.sliced && t.isCorrect) {
+            deductLife(); // Missed the primary target word
+          }
+          targets.splice(i, 1);
+        }
+      }
+
+      // Update & Draw Particles
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.update();
+        p.draw();
+        if (p.life <= 0) particles.splice(i, 1);
+      }
+
+      if (gameActive) {
+        requestAnimationFrame(gameLoop);
+      }
+    }
+
+    /* =========================================================================
+       8. GAME FLOW CONTROL
+       ========================================================================= */
+    async function startGame(mode) {
+      if (!currentStudent && studentList.length > 0) {
+        currentStudent = studentList[0];
+      }
+      
+      sound.init();
+      controlMode = mode;
+      score = 0;
+      lives = 3;
+      timer = 60; // 1-minute round
+      slicedCount = 0;
+      targets = [];
+      particles = [];
+
+      document.getElementById('score-text').innerText = '0';
+      document.getElementById('timer-text').innerText = '60';
+      document.getElementById('start-modal').classList.add('hidden');
+      document.getElementById('gameover-modal').classList.add('hidden');
+      updateLifeDisplay();
+
+      if (mode === 'camera') {
+        statusBanner.classList.remove('hidden');
+        statusBanner.innerText = `🥷 Pemain: ${currentStudent || 'Ninja'} | Requesting Camera Access...`;
+        try {
+          if (cameraUtils) {
+            await cameraUtils.start();
+          } else {
+            // Direct browser media stream fallback
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+            await video.play();
+          }
+        } catch (err) {
+          console.warn("Camera access failed or blocked:", err);
+          statusBanner.innerText = "⚠️ Camera Unavailable. Switching to Touch/Mouse!";
+          controlMode = 'touch';
+        }
+      } else {
+        statusBanner.innerText = `🥷 Pemain: ${currentStudent || 'Ninja'} | Touch / Mouse Enabled!`;
+      }
+
+      setNextTargetWord();
+      gameActive = true;
+
+      // Timer Countdown (Strict 1 minute round)
+      clearInterval(timerInterval);
+      timerInterval = setInterval(() => {
+        if (!gameActive) return;
+        timer--;
+        document.getElementById('timer-text').innerText = timer;
+        if (timer <= 0) {
+          endGame(true);
+        }
+      }, 1000);
+
+      spawnTargets();
+      requestAnimationFrame(gameLoop);
+    }
+
+    function endGame(timeUp = false) {
+      gameActive = false;
+      clearInterval(timerInterval);
+
+      document.getElementById('final-score').innerText = score;
+      document.getElementById('final-sliced').innerText = slicedCount;
+      document.getElementById('player-gameover-tag').innerText = `NINJA: ${currentStudent || 'PLAYER'}`;
+
+      const titleEl = document.getElementById('gameover-title');
+      const descEl = document.getElementById('gameover-desc');
+
+      if (timeUp) {
+        titleEl.innerText = "⏳ MASA 1 MINIT TAMAT!";
+        descEl.innerText = `Syabas ${currentStudent || 'Ninja'}! Kemahiran memotong tajam!`;
+      } else {
+        titleEl.innerText = "💥 TERTAMAT (NYAWA HABIS)!";
+        descEl.innerText = "Hati-hati dengan bom dan perkataan salah!";
+      }
+
+      document.getElementById('gameover-modal').classList.remove('hidden');
+    }
+
+    function nextStudentOrRestart() {
+      document.getElementById('gameover-modal').classList.add('hidden');
+      document.getElementById('start-modal').classList.remove('hidden');
+      pickRandomStudent();
+    }
+
+    // Initialize MediaPipe on window load
+    window.onload = () => {
+      initMediaPipe();
+    };
+  </script>
+</body>
+</html>
